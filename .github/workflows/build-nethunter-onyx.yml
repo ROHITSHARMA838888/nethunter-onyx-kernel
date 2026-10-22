@@ -8,38 +8,34 @@ jobs:
     name: Build NetHunter GKI 6.6 Kernel (All Wi-Fi Drivers)
     runs-on: ubuntu-latest
     steps:
-      - name: Maximize Build Space
+      - name: Maximize Build Space & Install Dependencies
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache
           sudo apt update -y
-          sudo apt install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev libncurses5-dev libssl-dev libxml2-utils bc python3 patch
+          sudo apt install -y git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev libncurses5-dev libssl-dev libxml2-utils bc python3 patch gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
-      - name: Setup Clang Toolchain (AOSP r510928 / Clang 18)
+      - name: Setup Clang Toolchain (AOSP r510928)
         run: |
           mkdir -p toolchain
           git clone --depth=1 https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r510928.git toolchain/clang
+          echo "${GITHUB_WORKSPACE}/toolchain/clang/bin" >> $GITHUB_PATH
 
       - name: Clone Google Common GKI 6.6 Tree
         run: |
           git clone --depth=1 https://android.googlesource.com/kernel/common -b android15-6.6 common
 
-      - name: Integrate Wi-Fi Drivers (Atheros, Realtek, Ralink, RTL8821AU Archer T2U)
+      - name: Integrate Wi-Fi Drivers (RTL8812AU / RTL8821AU / RTL8188EUS)
         run: |
           cd common
           # 1. mac80211 Packet Injection Patch
           curl -LSs "https://raw.githubusercontent.com/kimocoder/qualcomm_patches/master/mac80211.patch" | patch -p1 || true
 
-          # 2. Add RTL8812AU / RTL8821AU (TP-Link Archer T2U Plus + Alfa AWUS036ACH)
+          # 2. Add RTL8812AU & RTL8821AU (TP-Link Archer T2U Plus + Alfa AWUS036ACH)
           git clone --depth=1 https://github.com/aircrack-ng/rtl8812au.git drivers/net/wireless/rtl8812au
           echo "obj-\$(CONFIG_8812AU) += rtl8812au/" >> drivers/net/wireless/Makefile
           echo "source \"drivers/net/wireless/rtl8812au/Kconfig\"" >> drivers/net/wireless/Kconfig
 
-          # 3. Add RTL8821AU dedicated driver (Archer T2U Plus AC600)
-          git clone --depth=1 https://github.com/morrownr/8821au-20210708.git drivers/net/wireless/rtl8821au
-          echo "obj-\$(CONFIG_8821AU) += rtl8821au/" >> drivers/net/wireless/Makefile
-          echo "source \"drivers/net/wireless/rtl8821au/Kconfig\"" >> drivers/net/wireless/Kconfig
-
-          # 4. Add RTL8188EUS (TP-Link WN722N v2/v3 with injection)
+          # 3. Add RTL8188EUS (TP-Link WN722N v2/v3)
           git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git drivers/net/wireless/rtl8188eus
           echo "obj-\$(CONFIG_8188EU) += rtl8188eus/" >> drivers/net/wireless/Makefile
           echo "source \"drivers/net/wireless/rtl8188eus/Kconfig\"" >> drivers/net/wireless/Kconfig
@@ -47,12 +43,12 @@ jobs:
       - name: Configure NetHunter Flags (4KB Page Size + All Drivers)
         run: |
           cd common
-          # Enable 4KB page size (matching Infinity OS)
+          # Append 4KB page size and wireless configs
           cat << 'EOF' >> arch/arm64/configs/gki_defconfig
           CONFIG_ARM64_4K_PAGES=y
           # CONFIG_ARM64_16K_PAGES is not set
 
-          # Wireless Stack
+          # Wireless Core
           CONFIG_CFG80211=m
           CONFIG_MAC80211=m
           CONFIG_MAC80211_MESH=y
@@ -73,11 +69,10 @@ jobs:
           CONFIG_WLAN_VENDOR_MEDIATEK=y
           CONFIG_MT7601U=m
 
-          # Realtek (RTL8187, RTL8188EUS, RTL8812AU, RTL8821AU Archer T2U)
+          # Realtek (RTL8187, RTL8188EUS, RTL8812AU / RTL8821AU)
           CONFIG_WLAN_VENDOR_REALTEK=y
           CONFIG_RTL8187=m
           CONFIG_8812AU=m
-          CONFIG_8821AU=m
           CONFIG_8188EU=m
 
           # BadUSB HID & USB Gadget
@@ -91,14 +86,10 @@ jobs:
         run: |
           cd common
           export PATH="${GITHUB_WORKSPACE}/toolchain/clang/bin:$PATH"
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export CC=clang
-          export CLANG_TRIPLE=aarch64-linux-gnu-
-          export CROSS_COMPILE=aarch64-linux-gnu-
 
-          make -j$(nproc) O=out gki_defconfig
-          make -j$(nproc) O=out Image modules
+          # Use LLVM=1 and aarch64-linux-gnu- Cross-Compiler
+          make -j$(nproc) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- gki_defconfig
+          make -j$(nproc) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- Image modules
 
       - name: Collect Modules and Firmware
         run: |
@@ -133,4 +124,3 @@ jobs:
         with:
           name: NetHunter-Kernel-POCO-F7-Onyx-AllWifi
           path: AnyKernel3/NetHunter-Kernel-POCO-F7-Onyx-AllWifi.zip
-
