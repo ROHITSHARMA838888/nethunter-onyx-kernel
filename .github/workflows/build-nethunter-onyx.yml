@@ -127,11 +127,12 @@ jobs:
 
       - name: Package AnyKernel3 Flashable Zip
         run: |
-          git clone https://github.com/osm0sis/AnyKernel3 -b gki tmp_ak3
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git tmp_ak3
           cp -r tmp_ak3/* AnyKernel3/
           cd AnyKernel3
 
-          # Configure anykernel.sh for POCO F7 (Onyx)
+          # Configure anykernel.sh for POCO F7 (Onyx) GKI
+          sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' anykernel.sh
           sed -i 's/device.name1=.*/device.name1=onyx/g' anykernel.sh
           sed -i 's/device.name2=.*/device.name2=peridot/g' anykernel.sh
 
@@ -142,4 +143,3 @@ jobs:
         with:
           name: NetHunter-Kernel-POCO-F7-Onyx-AllWifi
           path: AnyKernel3/NetHunter-Kernel-POCO-F7-Onyx-AllWifi.zip
-
