@@ -1,0 +1,97 @@
+name: Build Realtek 8821AU & 8188EUS NetHunter Modules (Onyx)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-wifi-drivers:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: false
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev \
+            gcc-aarch64-linux-gnu clang lld llvm zip curl git
+
+      - name: Download Android 15 Linux 6.6 Kernel Tree
+        run: |
+          git clone --depth=1 https://android.googlesource.com/kernel/common -b android15-6.6 kernel
+          cd kernel
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- gki_defconfig
+          # Enable module building and wireless
+          scripts/config -e CONFIG_MODULES -e CONFIG_CFG80211 -e CONFIG_MAC80211 -e CONFIG_WIFI_MONITOR
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
+
+      - name: Build TP-Link Archer T2U Plus (RTL8821AU) Driver
+        run: |
+          git clone --depth=1 https://github.com/morrownr/8821au-20210708.git rtl8821au
+          cd rtl8821au
+          # Set architecture and kernel source path
+          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
+          sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
+          sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' Makefile
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- KSRC=$GITHUB_WORKSPACE/kernel modules || \
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=$GITHUB_WORKSPACE/kernel modules
+          ls -la 8821au.ko
+
+      - name: Build TP-Link TL-WN722N v2/v3 (RTL8188EUS) Driver
+        run: |
+          git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git rtl8188eus
+          cd rtl8188eus
+          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
+          sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
+          sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' Makefile
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- KSRC=$GITHUB_WORKSPACE/kernel modules || \
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=$GITHUB_WORKSPACE/kernel modules
+          ls -la 8188eu.ko
+
+      - name: Collect & Patch Vermagic for POCO F7
+        run: |
+          mkdir -p output_modules
+          cp rtl8821au/8821au.ko output_modules/ 2>/dev/null || true
+          cp rtl8188eus/8188eu.ko output_modules/ 2>/dev/null || true
+
+          TARGET_VER="6.6.142-4k-gd0881fd79058 SMP preempt mod_unload modversions aarch64"
+
+          python3 - << 'EOF'
+          import os, re
+
+          target = b"vermagic=6.6.142-4k-gd0881fd79058 SMP preempt mod_unload modversions aarch64"
+          for root, dirs, files in os.walk("output_modules"):
+              for file in files:
+                  if file.endswith(".ko"):
+                      path = os.path.join(root, file)
+                      with open(path, "rb") as f:
+                          data = f.read()
+                      idx = data.find(b"vermagic=")
+                      if idx != -1:
+                          end = data.find(b"\0", idx)
+                          old = data[idx:end]
+                          if len(target) <= len(old):
+                              padded = target + b"\0" * (len(old) - len(target))
+                              data = data[:idx] + padded + data[end:]
+                              with open(path, "wb") as f:
+                                  f.write(data)
+                              print(f"[OK] Patched vermagic in {file}")
+                          else:
+                              print(f"[WARN] Target vermagic longer than original in {file}")
+                      else:
+                          print(f"[WARN] vermagic not found in {file}")
+          EOF
+
+      - name: Upload Compiled 8821AU & 8188EU Modules
+        uses: actions/upload-artifact@v4
+        with:
+          name: Realtek-NetHunter-Drivers-POCO-F7
+          path: output_modules/
