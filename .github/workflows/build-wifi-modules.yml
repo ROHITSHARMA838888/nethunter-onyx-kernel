@@ -24,61 +24,64 @@ jobs:
           sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev \
             gcc-aarch64-linux-gnu clang lld llvm zip curl git python3
 
-      - name: Download Android 15 Linux 6.6 Kernel Tree
+      - name: Setup Kernel & In-Tree Drivers
         run: |
+          # 1. Clone Android 15 Linux 6.6 Kernel
           git clone --depth=1 https://android.googlesource.com/kernel/common -b android15-6.6 kernel
+
+          # 2. Clone Archer T2U Plus (8821au) into in-tree wireless folder
+          git clone --depth=1 https://github.com/morrownr/8821au-20210708.git kernel/drivers/net/wireless/rtl8821au
+          
+          # 3. Clone TL-WN722N v2/v3 (rtl8188eus) into in-tree wireless folder
+          git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git kernel/drivers/net/wireless/rtl8188eus
+
+          # 4. Fix Kconfig syntax for Linux 6.6
+          sed -i 's/---help---/help/g' kernel/drivers/net/wireless/rtl8188eus/Kconfig
+
+          # 5. Fix compiler warning flags in 8821au Makefile
+          sed -i 's/-Wno-enum-int-mismatch//g' kernel/drivers/net/wireless/rtl8821au/Makefile
+          sed -i 's/-Wno-stringop-overread//g' kernel/drivers/net/wireless/rtl8821au/Makefile
+          sed -i 's/-Werror//g' kernel/drivers/net/wireless/rtl8821au/Makefile
+          sed -i 's/-Werror//g' kernel/drivers/net/wireless/rtl8188eus/Makefile
+
+          # 6. Enable Monitor Mode in drivers
+          sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' kernel/drivers/net/wireless/rtl8821au/Makefile
+          sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' kernel/drivers/net/wireless/rtl8188eus/Makefile
+
+          # 7. Hook drivers into kernel Kconfig & Makefile
+          echo 'source "drivers/net/wireless/rtl8821au/Kconfig"' >> kernel/drivers/net/wireless/Kconfig
+          echo 'source "drivers/net/wireless/rtl8188eus/Kconfig"' >> kernel/drivers/net/wireless/Kconfig
+          echo 'obj-$(CONFIG_RTL8821AU) += rtl8821au/' >> kernel/drivers/net/wireless/Makefile
+          echo 'obj-$(CONFIG_RTL8188EU) += rtl8188eus/' >> kernel/drivers/net/wireless/Makefile
+
+      - name: Configure Kernel with Ultra-Fast Compilation (No LTO)
+        run: |
           cd kernel
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- gki_defconfig
-          scripts/config -e CONFIG_MODULES -e CONFIG_CFG80211 -e CONFIG_MAC80211
-          # Disable CFI to allow out-of-tree module builds cleanly
+          
+          # Disable LTO to speed up build from 40 mins to ~4 mins
+          scripts/config -d CONFIG_LTO_CLANG_FULL -d CONFIG_LTO_CLANG_THIN -e CONFIG_LTO_NONE
+          
+          # Disable CFI to prevent sanitize errors
           scripts/config -d CONFIG_CFI_CLANG
-          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
-
-      - name: Build TP-Link Archer T2U Plus (RTL8821AU) Driver
-        run: |
-          git clone --depth=1 https://github.com/morrownr/8821au-20210708.git rtl8821au
-          cd rtl8821au
           
-          # Fix Clang warning options in Makefile
-          sed -i 's/-Wno-enum-int-mismatch//g' Makefile
-          sed -i 's/-Wno-stringop-overread//g' Makefile
-          sed -i 's/-Werror//g' Makefile
-          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
-          sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
-          sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' Makefile
+          # Enable drivers as modules
+          scripts/config -e CONFIG_MODULES -e CONFIG_CFG80211 -e CONFIG_MAC80211
+          scripts/config -m CONFIG_RTL8821AU -m CONFIG_RTL8188EU
 
-          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- \
-            KSRC=$GITHUB_WORKSPACE/kernel \
-            USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration" \
-            modules
-
-          ls -la 8821au.ko
-
-      - name: Build TP-Link TL-WN722N v2/v3 (RTL8188EUS) Driver
+      - name: Compile Kernel Modules (In-Tree with Full Symbols)
         run: |
-          git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git rtl8188eus
-          cd rtl8188eus
-          
-          # Fix compiler flags in Makefile
-          sed -i 's/-Werror//g' Makefile
-          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
-          sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
-          sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' Makefile
-
-          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- \
-            KSRC=$GITHUB_WORKSPACE/kernel \
-            USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration" \
-            modules
-
-          ls -la 8188eu.ko
+          cd kernel
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) modules \
+            USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration"
 
       - name: Collect & Patch Vermagic for POCO F7
         run: |
           mkdir -p output_modules
-          cp rtl8821au/8821au.ko output_modules/ 2>/dev/null || true
-          cp rtl8188eus/8188eu.ko output_modules/ 2>/dev/null || true
+          find kernel/drivers/net/wireless/ -name "8821au.ko" -exec cp {} output_modules/ \;
+          find kernel/drivers/net/wireless/ -name "8188eu.ko" -exec cp {} output_modules/ \;
 
-          TARGET_VER="6.6.142-4k-gd0881fd79058 SMP preempt mod_unload modversions aarch64"
+          ls -la output_modules/
 
           python3 - << 'EOF'
           import os
