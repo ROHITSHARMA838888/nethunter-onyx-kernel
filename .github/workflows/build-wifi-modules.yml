@@ -22,38 +22,54 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev \
-            gcc-aarch64-linux-gnu clang lld llvm zip curl git
+            gcc-aarch64-linux-gnu clang lld llvm zip curl git python3
 
       - name: Download Android 15 Linux 6.6 Kernel Tree
         run: |
           git clone --depth=1 https://android.googlesource.com/kernel/common -b android15-6.6 kernel
           cd kernel
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- gki_defconfig
-          # Enable module building and wireless
-          scripts/config -e CONFIG_MODULES -e CONFIG_CFG80211 -e CONFIG_MAC80211 -e CONFIG_WIFI_MONITOR
+          scripts/config -e CONFIG_MODULES -e CONFIG_CFG80211 -e CONFIG_MAC80211
+          # Disable CFI to allow out-of-tree module builds cleanly
+          scripts/config -d CONFIG_CFI_CLANG
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- modules_prepare
 
       - name: Build TP-Link Archer T2U Plus (RTL8821AU) Driver
         run: |
           git clone --depth=1 https://github.com/morrownr/8821au-20210708.git rtl8821au
           cd rtl8821au
-          # Set architecture and kernel source path
+          
+          # Fix Clang warning options in Makefile
+          sed -i 's/-Wno-enum-int-mismatch//g' Makefile
+          sed -i 's/-Wno-stringop-overread//g' Makefile
+          sed -i 's/-Werror//g' Makefile
           sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
           sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
           sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' Makefile
-          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- KSRC=$GITHUB_WORKSPACE/kernel modules || \
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=$GITHUB_WORKSPACE/kernel modules
+
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- \
+            KSRC=$GITHUB_WORKSPACE/kernel \
+            USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration" \
+            modules
+
           ls -la 8821au.ko
 
       - name: Build TP-Link TL-WN722N v2/v3 (RTL8188EUS) Driver
         run: |
           git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git rtl8188eus
           cd rtl8188eus
+          
+          # Fix compiler flags in Makefile
+          sed -i 's/-Werror//g' Makefile
           sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
           sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
           sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' Makefile
-          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- KSRC=$GITHUB_WORKSPACE/kernel modules || \
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KSRC=$GITHUB_WORKSPACE/kernel modules
+
+          make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- \
+            KSRC=$GITHUB_WORKSPACE/kernel \
+            USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration" \
+            modules
+
           ls -la 8188eu.ko
 
       - name: Collect & Patch Vermagic for POCO F7
@@ -65,7 +81,7 @@ jobs:
           TARGET_VER="6.6.142-4k-gd0881fd79058 SMP preempt mod_unload modversions aarch64"
 
           python3 - << 'EOF'
-          import os, re
+          import os
 
           target = b"vermagic=6.6.142-4k-gd0881fd79058 SMP preempt mod_unload modversions aarch64"
           for root, dirs, files in os.walk("output_modules"):
