@@ -52,6 +52,7 @@ jobs:
           cd kernel-source
           
           # 1. Archer T2U Plus (RTL8821AU - AC600 Dual Band 2.4/5GHz)
+          rm -rf drivers/net/wireless/rtl8821au
           git clone --depth=1 https://github.com/morrownr/8821au-20210708.git drivers/net/wireless/rtl8821au
           sed -i 's/-Wno-enum-int-mismatch//g' drivers/net/wireless/rtl8821au/Makefile
           sed -i 's/-Wno-stringop-overread//g' drivers/net/wireless/rtl8821au/Makefile
@@ -61,6 +62,7 @@ jobs:
           echo 'obj-$(CONFIG_RTL8821AU) += rtl8821au/' >> drivers/net/wireless/Makefile
 
           # 2. TL-WN722N v2/v3 (RTL8188EUS with Monitor Mode & Injection)
+          rm -rf drivers/net/wireless/rtl8188eus
           git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git drivers/net/wireless/rtl8188eus
           sed -i 's/---help---/help/g' drivers/net/wireless/rtl8188eus/Kconfig
           sed -i 's/-Werror//g' drivers/net/wireless/rtl8188eus/Makefile
@@ -76,6 +78,7 @@ jobs:
       - name: Setup Pure 64-Bit AnyKernel3 with Custom UI for ROHIT SHARMA
         run: |
           cd kernel-source
+          rm -rf anykernel ak3_arm64
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
           
           # Replace with official osm0sis arm64-tools (Pure 64-bit for Snapdragon 8s Gen 4)
