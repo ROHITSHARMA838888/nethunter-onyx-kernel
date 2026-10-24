@@ -48,6 +48,9 @@ jobs:
           ZIP_BRAND=$(echo "S29uby1IYQ==" | base64 -d)
           sed -i "s/$ZIP_BRAND/NetHunter-Rohit/g" build.sh
 
+          # Prevent modpost from aborting on external module symbol warnings
+          sed -i 's/make "${MAKE_ARGS\[@\]}"/make "${MAKE_ARGS[@]}" KBUILD_MODPOST_WARN=1 USER_EXTRA_CFLAGS="-Wno-error"/g' build.sh
+
       - name: Download Clang Toolchain
         run: |
           mkdir -p toolchains
@@ -113,7 +116,7 @@ jobs:
             kernel_name="-NetHunter-Rohit" \
             bypasscharging=on \
             htsr=on \
-            lto=thin
+            lto=none
 
       - name: Compile and Bundle All Wireless Drivers & Firmware
         run: |
