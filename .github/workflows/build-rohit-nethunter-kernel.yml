@@ -38,9 +38,15 @@ jobs:
           SRC_URL=$(echo "aHR0cHM6Ly9naXRodWIuY29tL29ueXgtb3NzL2tvbm9oYS1rZXJuZWwtZ2tpLmdpdA==" | base64 -d)
           git clone --depth=1 "$SRC_URL" -b feature/nethunter kernel-source
           cd kernel-source
-          find arch/arm64/configs/ -name "*_defconfig" ! -name "gki*" -exec mv {} arch/arm64/configs/rohit_defconfig \; 2>/dev/null || true
-          sed -i -E 's/[a-zA-Z0-9_-]+_defconfig/rohit_defconfig/g' build.sh 2>/dev/null || true
-          sed -i -E 's/K[oO][a-zA-Z0-9_-]+/NetHunter-Rohit/g' build.sh 2>/dev/null || true
+          
+          # Cleanly rename the target defconfig without touching any other configs
+          TARGET_DEF=$(echo "a29ub2hhX2RlZmNvbmZpZw==" | base64 -d)
+          [ -f "arch/arm64/configs/$TARGET_DEF" ] && mv "arch/arm64/configs/$TARGET_DEF" "arch/arm64/configs/rohit_defconfig"
+          sed -i "s/$TARGET_DEF/rohit_defconfig/g" build.sh
+
+          # Cleanly rename zip branding
+          ZIP_BRAND=$(echo "S29uby1IYQ==" | base64 -d)
+          sed -i "s/$ZIP_BRAND/NetHunter-Rohit/g" build.sh
 
       - name: Download Clang Toolchain
         run: |
@@ -58,8 +64,6 @@ jobs:
           sed -i 's/-Wno-stringop-overread//g' drivers/net/wireless/rtl8821au/Makefile
           sed -i 's/-Werror//g' drivers/net/wireless/rtl8821au/Makefile
           sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' drivers/net/wireless/rtl8821au/Makefile
-          echo 'source "drivers/net/wireless/rtl8821au/Kconfig"' >> drivers/net/wireless/Kconfig
-          echo 'obj-$(CONFIG_RTL8821AU) += rtl8821au/' >> drivers/net/wireless/Makefile
 
           # 2. TL-WN722N v2/v3 (RTL8188EUS with Monitor Mode & Injection)
           rm -rf drivers/net/wireless/rtl8188eus
@@ -69,7 +73,10 @@ jobs:
           sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' drivers/net/wireless/rtl8188eus/Makefile
           printf '\n#ifdef MODULE_IMPORT_NS\nMODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);\n#endif\n' >> drivers/net/wireless/rtl8188eus/os_dep/osdep_service.c
           printf '\n#ifdef MODULE_IMPORT_NS\nMODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);\n#endif\n' >> drivers/net/wireless/rtl8188eus/os_dep/linux/os_intfs.c
-          echo 'source "drivers/net/wireless/rtl8188eus/Kconfig"' >> drivers/net/wireless/Kconfig
+
+          # Hook drivers inside WLAN menu in Kconfig & Makefile
+          sed -i '/endif # WLAN/i source "drivers/net/wireless/rtl8821au/Kconfig"\nsource "drivers/net/wireless/rtl8188eus/Kconfig"' drivers/net/wireless/Kconfig
+          echo 'obj-$(CONFIG_RTL8821AU) += rtl8821au/' >> drivers/net/wireless/Makefile
           echo 'obj-$(CONFIG_RTL8188EU) += rtl8188eus/' >> drivers/net/wireless/Makefile
 
           # Inject module configs directly inside apply_nethunter_configs() in nethunter_patch.sh
