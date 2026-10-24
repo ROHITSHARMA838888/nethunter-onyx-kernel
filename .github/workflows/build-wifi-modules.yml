@@ -48,7 +48,22 @@ jobs:
           sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' kernel/drivers/net/wireless/rtl8821au/Makefile
           sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' kernel/drivers/net/wireless/rtl8188eus/Makefile
 
-          # 7. Hook drivers into kernel Kconfig & Makefile
+          # 7. Fix VFS_internal namespace import for 8188eu on Linux 6.6
+          cat << 'EOF' >> kernel/drivers/net/wireless/rtl8188eus/os_dep/osdep_service.c
+
+#ifdef MODULE_IMPORT_NS
+MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+#endif
+EOF
+
+          cat << 'EOF' >> kernel/drivers/net/wireless/rtl8188eus/os_dep/linux/os_intfs.c
+
+#ifdef MODULE_IMPORT_NS
+MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+#endif
+EOF
+
+          # 8. Hook drivers into kernel Kconfig & Makefile
           echo 'source "drivers/net/wireless/rtl8821au/Kconfig"' >> kernel/drivers/net/wireless/Kconfig
           echo 'source "drivers/net/wireless/rtl8188eus/Kconfig"' >> kernel/drivers/net/wireless/Kconfig
           echo 'obj-$(CONFIG_RTL8821AU) += rtl8821au/' >> kernel/drivers/net/wireless/Makefile
@@ -73,6 +88,7 @@ jobs:
         run: |
           cd kernel
           make ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) modules \
+            KBUILD_MODPOST_WARN=1 \
             USER_EXTRA_CFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-implicit-function-declaration"
 
       - name: Collect & Patch Vermagic for POCO F7
