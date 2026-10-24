@@ -7,17 +7,6 @@ jobs:
   build-rohit-kernel:
     runs-on: ubuntu-24.04
     steps:
-      - name: Free Disk Space & Setup Swap
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: false
-
       - name: Setup 10GB Swap Space
         run: |
           sudo swapoff -a || true
@@ -103,6 +92,22 @@ jobs:
           # Custom anykernel.sh with UI messages
           echo "IyMjIEFueUtlcm5lbDMgUmFtZGlzayBNb2QgU2NyaXB0CiMjIG9zbTBzaXMgQCB4ZGEtZGV2ZWxvcGVycwojIyBOZXRIdW50ZXIgRWRpdGlvbiBmb3IgUE9DTyBGNyBieSBSb2hpdCBTaGFybWEKCnByb3BlcnRpZXMoKSB7ICcKa2VybmVsLnN0cmluZz1LYWxpIE5ldEh1bnRlciBLZXJuZWwgZm9yIFBPQ08gRjcgKG9ueXgpIGJ5IFJvaGl0IFNoYXJtYQpkby5kZXZpY2VjaGVjaz0wCmRvLm1vZHVsZXM9MApkby5zeXN0ZW1sZXNzPTEKZG8uY2xlYW51cD0xCmRvLmNsZWFudXBvbmFib3J0PTAKZGV2aWNlLm5hbWUxPW9ueXgKZGV2aWNlLm5hbWUyPXBlcmlkb3QKJzsgfQoKQkxPQ0s9Ym9vdDsKSVNfU0xPVF9ERVZJQ0U9YXV0bzsKUkFNRElTS19DT01QUkVTU0lPTj1hdXRvOwpQQVRDSF9WQk1FVEFfRkxBRz1hdXRvOwoKLiB0b29scy9hazMtY29yZS5zaDsKCnVpX3ByaW50ICIgIjsKdWlfcHJpbnQgIj09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09IjsKdWlfcHJpbnQgIiAgICAgICBLQUxJIE5FVEhVTlRFUiBLRVJORUwgRk9SIFBPQ08gRjcgICAgICAgICAgIjsKdWlfcHJpbnQgIiAgICAgICAgICAgICBDdXN0b20gQnVpbHQgZm9yIFJPSElUICAgICAgICAgICAgICAgIjsKdWlfcHJpbnQgIj09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09IjsKdWlfcHJpbnQgIiAiOwp1aV9wcmludCAiLSBVbnBhY2tpbmcgYm9vdCBpbWFnZS4uLiI7CnNwbGl0X2Jvb3Q7Cgp1aV9wcmludCAiLSBGbGFzaGluZyBOZXRIdW50ZXIgNi42IEtlcm5lbCBJbWFnZS4uLiI7CmZsYXNoX2Jvb3Q7Cgp1aV9wcmludCAiICI7CnVpX3ByaW50ICItIENvbmZpZ3VyaW5nIFdpcmVsZXNzIERyaXZlcnMgJiBOZXRIdW50ZXIgU2VydmljZS4uLiI7CmlmIFsgLWQgL2RhdGEvYWRiIF07IHRoZW4KICBLU1VfTU9EPSIvZGF0YS9hZGIvbW9kdWxlcy9uZXRodW50ZXJfd2lmaSIKICBta2RpciAtcCAiJEtTVV9NT0Qvc3lzdGVtL2xpYi9tb2R1bGVzIgogIG1rZGlyIC1wICIkS1NVX01PRC9zeXN0ZW0vZXRjL2Zpcm13YXJlIgogIAogIGlmIFsgLWQgd2lmaV9kcml2ZXJzIF07IHRoZW4KICAgIGNwIC1mIHdpZmlfZHJpdmVycy8qLmtvICIkS1NVX01PRC9zeXN0ZW0vbGliL21vZHVsZXMvIiAyPi9kZXYvbnVsbCB8fCB0cnVlCiAgICBjcCAtZiB3aWZpX2RyaXZlcnMvKi5mdyAiJEtTVV9NT0Qvc3lzdGVtL2V0Yy9maXJtd2FyZS8iIDI+L2Rldi9udWxsIHx8IHRydWUKICAgIGNwIC1mIHdpZmlfZHJpdmVycy8qLmJpbiAiJEtTVV9NT0Qvc3lzdGVtL2V0Yy9maXJtd2FyZS8iIDI+L2Rldi9udWxsIHx8IHRydWUKICBmaQoKICBjYXQgPDwgJ0tTVV9FT0YnID4gIiRLU1VfTU9EL21vZHVsZS5wcm9wIgppZD1uZXRodW50ZXJfd2lmaQpuYW1lPUthbGkgTmV0SHVudGVyIFdpLUZpIERyaXZlcnMgKFJvaGl0IEVkaXRpb24pCnZlcnNpb249djEuMC1Sb2hpdAp2ZXJzaW9uQ29kZT0xMDAKYXV0aG9yPVJvaGl0IFNoYXJtYQpkZXNjcmlwdGlvbj1BY3RpdmUgZXh0ZXJuYWwgV2ktRmkgZHJpdmVycyBmb3IgVFAtTGluayBUTC1XTjcyMk4sIEFyY2hlciBUMlUgUGx1cywgQWxmYSBBV1VTMDM2QUNIIHdpdGggbW9uaXRvciBtb2RlICYgcGFja2V0IGluamVjdGlvbi4KS1NVX0VPRgoKICBjYXQgPDwgJ0tTVV9FT0YnID4gIiRLU1VfTU9EL3NlcnZpY2Uuc2giCiMhL3N5c3RlbS9iaW4vc2gKTU9ERElSPSR7MCUvKn0Kc2xlZXAgNQpmb3IgbW9kIGluIGNmZzgwMjExLmtvIG1hYzgwMjExLmtvIDg4MjFhdS5rbyA4MTg4ZXUua28gYXRoOWtfaHRjLmtvIHJ0MjgwMHVzYi5rbyBydGw4eHh4dS5rbzsgZG8KICBbIC1mICIkTU9ERElSL3N5c3RlbS9saWIvbW9kdWxlcy8kbW9kIiBdICYmIGluc21vZCAiJE1PRERJUi9zeXN0ZW0vbGliL21vZHVsZXMvJG1vZCIgMj4vZGV2L251bGwKZG9uZQpLU1VfRU9GCiAgY2htb2QgNzU1ICIkS1NVX01PRC9zZXJ2aWNlLnNoIgogIHVpX3ByaW50ICIgIFsrXSBLZXJuZWxTVSBXaS1GaSBNb2R1bGUgY29uZmlndXJlZCBzdWNjZXNzZnVsbHkiOwpmaQoKdWlfcHJpbnQgIiAiOwp1aV9wcmludCAiPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0iOwp1aV9wcmludCAiIFsrXSBOZXRIdW50ZXIgS2VybmVsIEluc3RhbGxlZCBTdWNjZXNzZnVsbHkhICAgICAiOwp1aV9wcmludCAiIFsrXSBVU0IgV2ktRmkgRHJpdmVycyAmIEluamVjdGlvbiBBY3RpdmUgICAgICAgICAiOwp1aV9wcmludCAiIFsrXSBCYWRVU0IgSElEIEdhZGdldCBBY3RpdmUgICAgICAgICAgICAgICAgICAgICAiOwp1aV9wcmludCAiIFsrXSBLZXJuZWxTVS1OZXh0IFJvb3QgQWN0aXZlICAgICAgICAgICAgICAgICAgICAiOwp1aV9wcmludCAiIFsrXSBSZWJvb3QgYW5kIFBsdWcgaW4geW91ciBXaS1GaSBBZGFwdGVyISAgICAgICAiOwp1aV9wcmludCAiPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0iOwp1aV9wcmludCAiICI7" | base64 -d > anykernel/anykernel.sh
 
+      - name: Pre-configure KernelSU-Next to Prevent Hanging
+        run: |
+          cd kernel-source
+          mkdir -p .root_modules/KernelSU-Next
+          git clone --depth=1 https://github.com/KernelSU-Next/KernelSU-Next.git -b dev .root_modules/KernelSU-Next
+          
+          # 1. Neutralize git unshallow commands that freeze make inside subshells
+          sed -i 's/git fetch --unshallow/true/g' .root_modules/KernelSU-Next/kernel/Kbuild || true
+          sed -i 's/--unshallow//g' .root_modules/KernelSU-Next/kernel/Kbuild || true
+          
+          # 2. Hardcode valid version tag and disable preinit hanging
+          sed -i 's/KSU_GIT_VERSION_VALID := 1/KSU_GIT_VERSION_VALID := 1\nKSU_GIT_VERSION := 12000\nKSU_GIT_TAG := v1.0.5/g' .root_modules/KernelSU-Next/kernel/Kbuild || true
+          
+          # 3. Strip .git so Makefile does not attempt network resolution
+          rm -rf .root_modules/KernelSU-Next/.git
+
       - name: Build NetHunter Kernel
         run: |
           cd kernel-source
@@ -116,6 +121,7 @@ jobs:
             kernel_name="-NetHunter-Rohit" \
             bypasscharging=on \
             htsr=on \
+            autofdo=off \
             lto=none
 
       - name: Compile and Bundle All Wireless Drivers & Firmware
