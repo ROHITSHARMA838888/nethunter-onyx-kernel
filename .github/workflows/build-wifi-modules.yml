@@ -49,19 +49,8 @@ jobs:
           sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' kernel/drivers/net/wireless/rtl8188eus/Makefile
 
           # 7. Fix VFS_internal namespace import for 8188eu on Linux 6.6
-          cat << 'EOF' >> kernel/drivers/net/wireless/rtl8188eus/os_dep/osdep_service.c
-
-#ifdef MODULE_IMPORT_NS
-MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
-#endif
-EOF
-
-          cat << 'EOF' >> kernel/drivers/net/wireless/rtl8188eus/os_dep/linux/os_intfs.c
-
-#ifdef MODULE_IMPORT_NS
-MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
-#endif
-EOF
+          printf '\n#ifdef MODULE_IMPORT_NS\nMODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);\n#endif\n' >> kernel/drivers/net/wireless/rtl8188eus/os_dep/osdep_service.c
+          printf '\n#ifdef MODULE_IMPORT_NS\nMODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);\n#endif\n' >> kernel/drivers/net/wireless/rtl8188eus/os_dep/linux/os_intfs.c
 
           # 8. Hook drivers into kernel Kconfig & Makefile
           echo 'source "drivers/net/wireless/rtl8821au/Kconfig"' >> kernel/drivers/net/wireless/Kconfig
@@ -99,7 +88,7 @@ EOF
 
           ls -la output_modules/
 
-          python3 - << 'EOF'
+          python3 -c '
           import os
 
           target = b"vermagic=6.6.142-4k-gd0881fd79058 SMP preempt mod_unload modversions aarch64"
@@ -123,7 +112,7 @@ EOF
                               print(f"[WARN] Target vermagic longer than original in {file}")
                       else:
                           print(f"[WARN] vermagic not found in {file}")
-          EOF
+          '
 
       - name: Upload Compiled 8821AU & 8188EU Modules
         uses: actions/upload-artifact@v4
