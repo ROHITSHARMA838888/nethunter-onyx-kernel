@@ -38,41 +38,12 @@ jobs:
           sed -i "s/$ZIP_BRAND/NetHunter-Rohit/g" build.sh
 
           # Prevent modpost from aborting on external module symbol warnings
-          sed -i 's/make "${MAKE_ARGS\[@\]}"/make "${MAKE_ARGS[@]}" KBUILD_MODPOST_WARN=1 USER_EXTRA_CFLAGS="-Wno-error"/g' build.sh
+          sed -i 's/make "${MAKE_ARGS\[@\]}"/make "${MAKE_ARGS[@]}" KBUILD_MODPOST_WARN=1/g' build.sh
 
       - name: Download Clang Toolchain
         run: |
           mkdir -p toolchains
           git clone --depth=1 https://github.com/ZyCromerZ/Clang.git -b main toolchains/clang
-
-      - name: Integrate Extra Realtek Drivers (8821AU & 8188EUS)
-        run: |
-          cd kernel-source
-          
-          # 1. Archer T2U Plus (RTL8821AU - AC600 Dual Band 2.4/5GHz)
-          rm -rf drivers/net/wireless/rtl8821au
-          git clone --depth=1 https://github.com/morrownr/8821au-20210708.git drivers/net/wireless/rtl8821au
-          sed -i 's/-Wno-enum-int-mismatch//g' drivers/net/wireless/rtl8821au/Makefile
-          sed -i 's/-Wno-stringop-overread//g' drivers/net/wireless/rtl8821au/Makefile
-          sed -i 's/-Werror//g' drivers/net/wireless/rtl8821au/Makefile
-          sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' drivers/net/wireless/rtl8821au/Makefile
-
-          # 2. TL-WN722N v2/v3 (RTL8188EUS with Monitor Mode & Injection)
-          rm -rf drivers/net/wireless/rtl8188eus
-          git clone --depth=1 https://github.com/aircrack-ng/rtl8188eus.git drivers/net/wireless/rtl8188eus
-          sed -i 's/---help---/help/g' drivers/net/wireless/rtl8188eus/Kconfig
-          sed -i 's/-Werror//g' drivers/net/wireless/rtl8188eus/Makefile
-          sed -i 's/CONFIG_WIFI_MONITOR = n/CONFIG_WIFI_MONITOR = y/g' drivers/net/wireless/rtl8188eus/Makefile
-          printf '\n#ifdef MODULE_IMPORT_NS\nMODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);\n#endif\n' >> drivers/net/wireless/rtl8188eus/os_dep/osdep_service.c
-          printf '\n#ifdef MODULE_IMPORT_NS\nMODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);\n#endif\n' >> drivers/net/wireless/rtl8188eus/os_dep/linux/os_intfs.c
-
-          # Hook drivers inside WLAN menu in Kconfig & Makefile
-          sed -i '/endif # WLAN/i source "drivers/net/wireless/rtl8821au/Kconfig"\nsource "drivers/net/wireless/rtl8188eus/Kconfig"' drivers/net/wireless/Kconfig
-          echo 'obj-$(CONFIG_RTL8821AU) += rtl8821au/' >> drivers/net/wireless/Makefile
-          echo 'obj-$(CONFIG_RTL8188EU) += rtl8188eus/' >> drivers/net/wireless/Makefile
-
-          # Inject module configs directly inside apply_nethunter_configs() in nethunter_patch.sh
-          sed -i '/CONFIG_RTL8XXXU/a \    scripts/config --file "$CONFIG_FILE" -m CONFIG_RTL8821AU -m CONFIG_RTL8188EU' nethunter_patch.sh
 
       - name: Setup Pure 64-Bit AnyKernel3 with Custom UI for ROHIT SHARMA
         run: |
@@ -98,14 +69,10 @@ jobs:
           mkdir -p .root_modules/KernelSU-Next
           git clone --depth=1 https://github.com/KernelSU-Next/KernelSU-Next.git -b dev .root_modules/KernelSU-Next
           
-          # 1. Neutralize git unshallow commands that freeze make inside subshells
+          # Neutralize git unshallow commands that freeze make inside subshells
           sed -i 's/git fetch --unshallow/true/g' .root_modules/KernelSU-Next/kernel/Kbuild || true
           sed -i 's/--unshallow//g' .root_modules/KernelSU-Next/kernel/Kbuild || true
-          
-          # 2. Hardcode valid version tag and disable preinit hanging
           sed -i 's/KSU_GIT_VERSION_VALID := 1/KSU_GIT_VERSION_VALID := 1\nKSU_GIT_VERSION := 12000\nKSU_GIT_TAG := v1.0.5/g' .root_modules/KernelSU-Next/kernel/Kbuild || true
-          
-          # 3. Strip .git so Makefile does not attempt network resolution
           rm -rf .root_modules/KernelSU-Next/.git
 
       - name: Build NetHunter Kernel
@@ -127,13 +94,18 @@ jobs:
       - name: Compile and Bundle All Wireless Drivers & Firmware
         run: |
           cd kernel-source
-          
-          # 1. Compile modules
-          echo "[+] Compiling kernel modules..."
-          make O=out CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip LLVM=1 LLVM_IAS=1 -j$(nproc --all) modules || true
-          
-          # 2. Collect all wireless modules
           mkdir -p wifi_drivers
+          
+          # 1. Compile out-of-tree RTL8821AU (Archer T2U Plus) driver cleanly
+          echo "[+] Compiling RTL8821AU driver..."
+          git clone --depth=1 https://github.com/morrownr/8821au-20210708.git /tmp/8821au || true
+          if [ -d /tmp/8821au ]; then
+            make -C out M=/tmp/8821au ARCH=arm64 LLVM=1 -j$(nproc --all) modules || true
+            cp -v /tmp/8821au/*.ko wifi_drivers/ 2>/dev/null || true
+          fi
+          
+          # 2. Collect in-kernel modules (rtl8xxxu, ath9k_htc, rt2800usb, cfg80211, mac80211)
+          echo "[+] Collecting built-in kernel modules..."
           find out/ -name "*.ko" -exec cp -v {} wifi_drivers/ \; || true
           
           # 3. Download firmware for AR9271 and RT2800
